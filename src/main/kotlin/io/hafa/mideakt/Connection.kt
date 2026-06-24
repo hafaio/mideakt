@@ -104,8 +104,8 @@ internal class MideaConnection(
                     throw ProtocolException("response hash mismatch")
                 }
                 val pad = (header[5].toInt() and 0xFF) shr 4
-                if (pad > 0) decrypted.copyOfRange(2, decrypted.size - pad)
-                else decrypted.copyOfRange(2, decrypted.size)
+                if (decrypted.size < 2 + pad) throw ProtocolException("short packet")
+                decrypted.copyOfRange(2, decrypted.size - pad)
             }
             0xF -> throw ProtocolException("error packet received")
             else -> throw ProtocolException("unexpected packet type")

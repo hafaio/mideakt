@@ -67,6 +67,7 @@ object Setup {
                 }
             }
         }
+        if (results.isEmpty()) throw SetupException("Devices found, but none could be provisioned")
         return results
     }
 }
