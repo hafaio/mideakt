@@ -62,7 +62,7 @@ data class SetState internal constructor(
     var beep: Boolean = true,
     /** Whether the unit is powered on. */
     var powerOn: Boolean,
-    /** Target temperature in °C, in 0.5° steps; typically 17–30. */
+    /** Target temperature in °C, in 0.5° steps; clamped to 17–30 when sent. */
     var targetTemperature: Double,
     /** Operating mode; set from an [OperationalMode] value, e.g. `OperationalMode.COOL.raw`. */
     var mode: Int,
@@ -104,8 +104,9 @@ data class SetState internal constructor(
         val beepByte = if (beep) 0x40 else 0
         val powerByte = if (powerOn) 0x01 else 0
 
-        val integral = floor(targetTemperature).toInt()
-        val hasHalf = targetTemperature - integral > 0
+        val clamped = targetTemperature.coerceIn(17.0, 30.0)
+        val integral = floor(clamped).toInt()
+        val hasHalf = clamped - integral > 0
         var temperature: Int
         val temperatureAlt: Int
         if (integral in 17..30) {
@@ -157,11 +158,11 @@ data class SetState internal constructor(
 data class ACState(
     /** Whether the unit is powered on. */
     val powerOn: Boolean,
-    /** Target temperature in °C, in 0.5° steps. */
+    /** Target temperature in °C, in 0.5° steps; a device may report 13–43, wider than the 17–30 you can set. */
     val targetTemperature: Double,
-    /** Operating mode; resolve with [OperationalMode.fromRaw]. */
+    /** Operating mode (raw 0–7); resolve with [OperationalMode.fromRaw]. */
     val mode: Int,
-    /** Fan speed; resolve with [FanSpeed.fromRaw]. */
+    /** Fan speed (raw 0–127); resolve with [FanSpeed.fromRaw]. */
     val fanSpeed: Int,
     /** Measured indoor temperature in °C, or null if the unit doesn't report it. */
     val indoorTemperature: Double?,

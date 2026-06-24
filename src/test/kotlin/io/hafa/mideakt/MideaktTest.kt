@@ -1,9 +1,28 @@
 package io.hafa.mideakt
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MideaktTest {
+    @Test
+    fun targetTemperatureClampedOnEncode() {
+        fun state(temperature: Double) = SetState(
+            powerOn = true, targetTemperature = temperature, mode = OperationalMode.COOL.raw,
+            fanSpeed = FanSpeed.AUTO.raw, eco = false, swingMode = 0, turbo = false,
+            sleep = false, fahrenheit = false, purifier = false, targetHumidity = 40,
+            freezeProtection = false,
+        )
+        fun diff(left: ByteArray, right: ByteArray): Set<Int> =
+            left.indices.filter { left[it] != right[it] }.toSet()
+
+        // Two encodings of one setpoint differ only in the rolling message id and its checksums.
+        val idOnlyDiff = diff(state(30.0).encode(), state(30.0).encode())
+        // Over-range clamps to 30 °C; under-range to 17 °C — neither adds further byte differences.
+        assertEquals(idOnlyDiff, diff(state(60.0).encode(), state(30.0).encode()))
+        assertEquals(idOnlyDiff, diff(state(-5.0).encode(), state(17.0).encode()))
+    }
+
     @Test
     fun aesEcbRoundTrip() {
         val key = Security.ENC_KEY

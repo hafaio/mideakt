@@ -1,5 +1,6 @@
 package io.hafa.mideakt
 
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -148,7 +149,8 @@ class MideaClient internal constructor(
             ensureConnected()
             return try {
                 op(connection!!)
-            } catch (e: Exception) {
+            } catch (e: IOException) {
+                // Only transport faults are worth a reconnect; protocol/auth errors rethrow as-is.
                 disconnect()
                 if (!retry) throw e
                 ensureConnected()
