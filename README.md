@@ -4,7 +4,7 @@
 
 Native Kotlin library for **local** control of Midea (and rebranded) WiFi air
 conditioners over the LAN — no cloud after a one-time key fetch.
-This is a Kotlin port of the [msmart-ng](https://github.com/mill1000/msmart-ng).
+This is a Kotlin port of the [msmart-ng](https://github.com/mill1000/midea-msmart).
 
 Pure JVM (`java.net` sockets, `javax.crypto`), so it runs on plain JVM and on
 Android (see [Android](#android)). The only dependency is
@@ -119,5 +119,5 @@ never affects them.
 ### Cross-validation
 
 `src/test/resources/vectors.json` was generated from the canonical Python
-reference ([msmart-ng](https://github.com/mill1000/msmart-ng)); the tests assert
+reference ([msmart-ng](https://github.com/mill1000/midea-msmart)); the tests assert
 mideakt's framing, CRC, command encodings, and state parsing match it.
