@@ -11,6 +11,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Construct it from the [DeviceCredentials] that [Setup] returns, then reuse the
  * instance. It is [AutoCloseable], so prefer `use { }`:
  *
+ * Protocol V3 uses a token/key handshake; version-2 devices use an unauthenticated
+ * `0x5A5A` transport with no handshake.
+ *
  * ```kotlin
  * val credentials = Setup.run().first()
  * MideaClient(credentials).use { client ->
@@ -30,6 +33,7 @@ class MideaClient internal constructor(
     private val host: String,
     private val port: Int,
     private val deviceId: Long,
+    private val version: Int,
     private val token: ByteArray,
     private val key: ByteArray,
     private val connectTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
@@ -40,7 +44,7 @@ class MideaClient internal constructor(
         connectTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
         readTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
     ) : this(
-        credentials.ip, credentials.port, credentials.id,
+        credentials.ip, credentials.port, credentials.id, credentials.version,
         credentials.token.hexToBytes(), credentials.key.hexToBytes(),
         connectTimeoutMs, readTimeoutMs,
     )
@@ -105,11 +109,14 @@ class MideaClient internal constructor(
     private fun ensureConnected() {
         if (connection != null && System.currentTimeMillis() - authenticatedAt < sessionLifetimeMs) return
         disconnect()
-        val fresh = MideaConnection(host, port, deviceId)
+        val fresh = MideaConnection(host, port, deviceId, version)
         try {
             fresh.connect(connectTimeoutMs, readTimeoutMs)
-            fresh.authenticate(token, key)
-            warmUp(fresh)
+            if (version >= 3) {
+                // V2 has no handshake, so no post-auth warm-up either.
+                fresh.authenticate(token, key)
+                warmUp(fresh)
+            }
         } catch (e: Exception) {
             fresh.disconnect()  // don't leak the half-open socket
             throw e
@@ -147,15 +154,20 @@ class MideaClient internal constructor(
         }
         try {
             ensureConnected()
-            return try {
-                op(connection!!)
+            try {
+                return op(connection!!)
             } catch (e: IOException) {
-                // Only transport faults are worth a reconnect; protocol/auth errors rethrow as-is.
+                // Transport fault: reconnect and try once more, unless the caller opted out.
                 disconnect()
                 if (!retry) throw e
                 ensureConnected()
-                op(connection!!)
+                return op(connection!!)
             }
+        } catch (e: Exception) {
+            // Any error escaping here — a protocol/auth desync, or a failed retry — may have left
+            // the stream mid-frame; drop the connection so the next call reconnects on a clean one.
+            disconnect()
+            throw e
         } finally {
             inUse.set(false)
         }
