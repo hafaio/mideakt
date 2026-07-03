@@ -40,57 +40,62 @@ object Setup {
 
         cloud.login()
 
-        val results = devices.mapNotNull { device ->
-            if (device.version >= 3) provisionV3(cloud, device) else provisionV2(device)
+        val outcomes = devices.map { device ->
+            device to if (device.version >= 3) provisionV3(cloud, device) else provisionV2(device)
         }
-        if (results.isEmpty()) throw SetupException("Devices found, but none could be provisioned")
+        val results = outcomes.mapNotNull { (_, outcome) -> outcome.getOrNull() }
+        if (results.isEmpty()) throw provisioningFailure(outcomes)
         return results
+    }
+
+    /** Builds the all-failed error, naming each device and the reason it couldn't be provisioned. */
+    private fun provisioningFailure(
+        outcomes: List<Pair<DiscoveredDevice, Result<DeviceCredentials>>>,
+    ): SetupException {
+        val summary = outcomes.joinToString("; ") { (device, outcome) ->
+            val cause = outcome.exceptionOrNull()
+            "${device.name} (v${device.version}): ${cause?.message ?: cause?.javaClass?.simpleName ?: "unknown"}"
+        }
+        return SetupException("Devices found, but none could be provisioned: $summary").apply {
+            outcomes.forEach { (_, outcome) -> outcome.exceptionOrNull()?.let { addSuppressed(it) } }
+        }
     }
 
     /**
      * Verifies a version-2 device over its keyless transport, returning credentials
      * only if it answers a local query. V2 needs no cloud token.
      */
-    private fun provisionV2(device: DiscoveredDevice): DeviceCredentials? {
-        val responds = try {
-            MideaClient(device.ip, device.port, device.id, device.version, ByteArray(0), ByteArray(0))
-                .use { it.refresh() }
-            true
-        } catch (_: Exception) {
-            false
-        }
-        return if (responds) {
-            DeviceCredentials(device.name, device.id, device.ip, device.port, device.version, "", "")
-        } else {
-            null
-        }
+    private fun provisionV2(device: DiscoveredDevice): Result<DeviceCredentials> = runCatching {
+        MideaClient(device.ip, device.port, device.id, device.version, ByteArray(0), ByteArray(0))
+            .use { it.refresh() }
+        DeviceCredentials(device.name, device.id, device.ip, device.port, device.version, "", "")
     }
 
     /**
      * Fetches a version-3 device's token/key from the cloud and verifies it locally. The
      * udpid byte order isn't discoverable, so it tries little-endian then big-endian and
-     * returns the first pair that authenticates.
+     * returns the first pair that authenticates; on failure it carries the last error's cause.
      */
-    @Suppress("LoopWithTooManyJumpStatements")
-    private fun provisionV3(cloud: NetHomePlusCloud, device: DiscoveredDevice): DeviceCredentials? {
+    @Suppress("LoopWithTooManyJumpStatements", "TooGenericExceptionCaught")
+    private fun provisionV3(cloud: NetHomePlusCloud, device: DiscoveredDevice): Result<DeviceCredentials> {
+        var lastError: Throwable = SetupException("no token returned for ${device.name}")
         for (bigEndian in listOf(false, true)) {
             val udpid = UDPID.compute(device.id, bigEndian)
-            val pair = try { cloud.getToken(udpid) } catch (_: Exception) { continue }
-            val authenticated = try {
+            val pair = try { cloud.getToken(udpid) } catch (e: Exception) { lastError = e; continue }
+            try {
                 MideaClient(
                     device.ip, device.port, device.id, device.version,
                     pair.first.hexToBytes(), pair.second.hexToBytes(),
                 ).use { it.refresh() }  // verifies the token/key authenticate
-                true
-            } catch (_: Exception) {
-                false
-            }
-            if (authenticated) {
-                return DeviceCredentials(
-                    device.name, device.id, device.ip, device.port, device.version, pair.first, pair.second,
+                return Result.success(
+                    DeviceCredentials(
+                        device.name, device.id, device.ip, device.port, device.version, pair.first, pair.second,
+                    ),
                 )
+            } catch (e: Exception) {
+                lastError = e
             }
         }
-        return null
+        return Result.failure(lastError)
     }
 }
