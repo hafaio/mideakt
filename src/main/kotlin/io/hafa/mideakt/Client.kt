@@ -147,6 +147,17 @@ class MideaClient internal constructor(
         }
     }
 
+    /** Consumes and discards any complete frames already buffered, so each op reads its own reply. */
+    private fun drainStaleFrames(connection: MideaConnection) {
+        while (connection.bytesAvailable() > 0) {
+            try {
+                connection.readApplicationFrame()
+            } catch (_: Exception) {
+                return
+            }
+        }
+    }
+
     /** `retry` should be false for non-idempotent commands (relative toggle). */
     private fun <T> withConnection(retry: Boolean = true, op: (MideaConnection) -> T): T {
         check(inUse.compareAndSet(false, true)) {
@@ -154,6 +165,7 @@ class MideaClient internal constructor(
         }
         try {
             ensureConnected()
+            drainStaleFrames(connection!!)
             try {
                 return op(connection!!)
             } catch (e: IOException) {
@@ -161,6 +173,7 @@ class MideaClient internal constructor(
                 disconnect()
                 if (!retry) throw e
                 ensureConnected()
+                drainStaleFrames(connection!!)
                 return op(connection!!)
             }
         } catch (e: Exception) {
