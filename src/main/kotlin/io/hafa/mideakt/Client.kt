@@ -1,6 +1,7 @@
 package io.hafa.mideakt
 
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -60,6 +61,10 @@ class MideaClient internal constructor(
     private val warmUpFloorMs = 200L
     private val warmUpPollMs = 40L
     private val warmUpCeilingMs = 1200L
+
+    // The module frees its single connection slot lazily; reconnecting inside the same
+    // second lands on a slot it still holds, so a retry waits this long first.
+    private val reconnectCooldownMs = 1000L
 
     /** Closes the underlying connection; a later call reconnects automatically. */
     fun disconnect() {
@@ -158,7 +163,13 @@ class MideaClient internal constructor(
         }
     }
 
-    /** `retry` should be false for non-idempotent commands (relative toggle). */
+    /**
+     * `retry` should be false for non-idempotent commands (relative toggle). Only transport
+     * faults are retried; a timeout is surfaced immediately, since the device is present but
+     * slow and a reconnect can't change the outcome. The retry reconnects after a short
+     * cool-down so it doesn't land on the module's still-held slot.
+     */
+    @Suppress("ThrowsCount")
     private fun <T> withConnection(retry: Boolean = true, op: (MideaConnection) -> T): T {
         check(inUse.compareAndSet(false, true)) {
             "MideaClient accessed concurrently; it is not thread-safe — serialize access (e.g. behind a Mutex)."
@@ -168,10 +179,19 @@ class MideaClient internal constructor(
             drainStaleFrames(connection!!)
             try {
                 return op(connection!!)
+            } catch (e: SocketTimeoutException) {
+                // Mirror the Swift sibling: a timeout means the device is present but slow, so a
+                // reconnect can't change the outcome — surface it (dropping the possibly mid-frame
+                // stream) and let the caller's own retry ladder pace another try.
+                disconnect()
+                throw e
             } catch (e: IOException) {
                 // Transport fault: reconnect and try once more, unless the caller opted out.
                 disconnect()
                 if (!retry) throw e
+                // The module frees its single slot lazily, so reconnecting inside the same second
+                // lands on a held slot; wait it out before trying again.
+                Thread.sleep(reconnectCooldownMs)
                 ensureConnected()
                 drainStaleFrames(connection!!)
                 return op(connection!!)
