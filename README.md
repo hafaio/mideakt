@@ -1,6 +1,7 @@
 # mideakt
 
 [![build](https://github.com/hafaio/mideakt/actions/workflows/build.yml/badge.svg)](https://github.com/hafaio/mideakt/actions/workflows/build.yml)
+[![jitpack](https://jitpack.io/v/hafaio/mideakt.svg)](https://jitpack.io/#hafaio/mideakt)
 
 Native Kotlin library for **local** control of Midea (and rebranded) WiFi air
 conditioners over the LAN — no cloud after a one-time key fetch.
@@ -20,6 +21,40 @@ parse the cloud's JSON.
   toggle; reads full state. Persistent connection.
 
 Calls are **blocking** — run them off the main thread (e.g. `Dispatchers.IO`).
+
+## Installation
+
+Available from [JitPack](https://jitpack.io/#hafaio/mideakt). Add the repository,
+then the dependency:
+
+```kotlin
+repositories {
+    maven("https://jitpack.io")
+}
+
+dependencies {
+    implementation("com.github.hafaio:mideakt:0.1.0")
+}
+```
+
+<details>
+<summary>Maven</summary>
+
+```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+</repositories>
+
+<dependency>
+  <groupId>com.github.hafaio</groupId>
+  <artifactId>mideakt</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+</details>
 
 ## Usage
 
