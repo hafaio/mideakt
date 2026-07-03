@@ -84,11 +84,11 @@ instant its reply begins arriving, bounded by a ~1.2s ceiling — a fast unit
 answers in a fraction of a second. `getState` is idempotent, so the probe is
 harmless.
 
-Residual edge: if a device first answers *slower* than the ceiling, its probe
-reply is left unconsumed and a following relative toggle (the only non-idempotent,
-non-retried call) could misread it. The ceiling is sized so a healthy device
-always replies within it; the protocol has no request/reply correlation id to
-close this fully.
+If a device answers *slower* than the ceiling, its probe reply is left queued;
+before every call we drain any such buffered frames, so a slow probe reply is
+discarded rather than mistaken for the next call's response. The only unclosable
+residual is a probe reply still in flight during that drain — the protocol has no
+request/reply correlation id to fully close it — but the next call self-corrects.
 
 ### Concurrency
 
