@@ -108,7 +108,8 @@ internal object V2Packet {
             throw ProtocolException("bad start of packet")
         }
         val length = (data[4].toInt() and 0xFF) or ((data[5].toInt() and 0xFF) shl 8)
-        if (data.size < length) throw ProtocolException("packet truncated")
+        // length must cover the 40-byte header + 16-byte MD5 before the range reads below.
+        if (length < 56 || data.size < length) throw ProtocolException("packet truncated")
 
         val packet = data.copyOfRange(0, length)
         val encrypted = packet.copyOfRange(40, length - 16)

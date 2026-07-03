@@ -7,14 +7,17 @@ import java.net.Socket
 import kotlin.random.Random
 
 /**
- * Blocking TCP transport implementing the Midea V3 "8370" framing and key
- * handshake. Call from a background thread/coroutine; not thread-safe.
+ * Blocking TCP transport for the Midea LAN protocol. [version] 3 uses the "8370"
+ * framing with the key handshake; version 2 uses the unauthenticated `0x5A5A`
+ * framing directly (no handshake). Call from a background thread/coroutine; not
+ * thread-safe.
  */
 @Suppress("TooManyFunctions")
 internal class MideaConnection(
     private val host: String,
     private val port: Int,
     private val deviceId: Long,
+    private val version: Int,
 ) {
     private var socket: Socket? = null
     private var input: DataInputStream? = null
@@ -50,10 +53,13 @@ internal class MideaConnection(
     }
 
     fun sendApplicationFrame(frame: ByteArray) {
-        writeRaw(encodeEncrypted(V2Packet.encode(deviceId, frame)))
+        val packet = V2Packet.encode(deviceId, frame)
+        // V3 wraps the 0x5A5A packet in the encrypted 8370 layer; V2 sends it bare.
+        writeRaw(if (version >= 3) encodeEncrypted(packet) else packet)
     }
 
-    fun readApplicationFrame(): ByteArray = V2Packet.decode(process(readPacket()))
+    fun readApplicationFrame(): ByteArray =
+        if (version >= 3) V2Packet.decode(process(readPacket())) else V2Packet.decode(readV2Packet())
 
     /** Bytes already received and waiting to be read, without blocking. */
     fun bytesAvailable(): Int = input?.available() ?: 0
@@ -95,6 +101,7 @@ internal class MideaConnection(
         return when (packet[5].toInt() and 0xF) {
             0x1 -> packet.copyOfRange(8, packet.size)  // handshake: 6 header + 2 packet id
             0x3 -> {
+                if (packet.size < 38) throw ProtocolException("short packet")  // 6 header + 32 hash
                 val key = localKey ?: throw ProtocolException("not authenticated")
                 val header = packet.copyOfRange(0, 6)
                 val encrypted = packet.copyOfRange(6, packet.size - 32)
@@ -121,6 +128,22 @@ internal class MideaConnection(
         }
         val total = (((header[2].toInt() and 0xFF) shl 8) or (header[3].toInt() and 0xFF)) + 8
         val rest = ByteArray(total - 6)
+        stream.readFully(rest)
+        return header + rest
+    }
+
+    /** Reads one bare `0x5A5A` packet (V2 transport); its length lives at bytes 4-5, little-endian. */
+    @Suppress("ThrowsCount")
+    private fun readV2Packet(): ByteArray {
+        val stream = input ?: throw ProtocolException("not connected")
+        val header = ByteArray(6)
+        stream.readFully(header)
+        if (header[0].toInt() and 0xFF != 0x5A || header[1].toInt() and 0xFF != 0x5A) {
+            throw ProtocolException("bad start of packet in stream")
+        }
+        val length = (header[4].toInt() and 0xFF) or ((header[5].toInt() and 0xFF) shl 8)
+        if (length < 6) throw ProtocolException("packet truncated")
+        val rest = ByteArray(length - 6)
         stream.readFully(rest)
         return header + rest
     }

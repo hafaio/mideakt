@@ -104,6 +104,7 @@ data class SetState internal constructor(
         val beepByte = if (beep) 0x40 else 0
         val powerByte = if (powerOn) 0x01 else 0
 
+        require(!targetTemperature.isNaN()) { "targetTemperature must not be NaN" }
         val clamped = targetTemperature.coerceIn(17.0, 30.0)
         val integral = floor(clamped).toInt()
         val hasHalf = clamped - integral > 0
