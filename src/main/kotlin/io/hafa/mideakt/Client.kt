@@ -180,9 +180,9 @@ class MideaClient internal constructor(
             try {
                 return op(connection!!)
             } catch (e: SocketTimeoutException) {
-                // Mirror the Swift sibling: a timeout means the device is present but slow, so a
-                // reconnect can't change the outcome — surface it (dropping the possibly mid-frame
-                // stream) and let the caller's own retry ladder pace another try.
+                // A timeout means the device is present but slow, so a reconnect can't change the
+                // outcome — surface it (dropping the possibly mid-frame stream) and let the caller's
+                // own retry ladder pace another try.
                 disconnect()
                 throw e
             } catch (e: IOException) {
