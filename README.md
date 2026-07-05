@@ -20,6 +20,9 @@ parse the cloud's JSON.
 - **Local control**: power, mode, temperature, fan, eco/turbo/swing, display
   toggle; reads full state. Persistent connection.
 
+Older version-2 devices use an unauthenticated (`0x5A5A`) protocol: they skip
+the cloud key fetch and are verified with a local query instead.
+
 Calls are **blocking** — run them off the main thread (e.g. `Dispatchers.IO`).
 
 ## Installation
