@@ -13,7 +13,7 @@ data class DiscoveredDevice(
     val port: Int,
     val version: Int,
     val name: String,
-    val serialNumber: String,
+    val serialNumber: String?,
 )
 
 /** LAN discovery: broadcast the Midea probe and parse V2/V3 replies. */
@@ -80,7 +80,9 @@ object Discovery {
         if (decrypted.size < 41) return null
 
         val port = (decrypted[4].toInt() and 0xFF) or ((decrypted[5].toInt() and 0xFF) shl 8)
-        val serial = String(decrypted, 8, 32, Charsets.US_ASCII).trim { it <= ' ' }
+        // The serial sits in a fixed 32-byte field padded with NULs or spaces; a field that
+        // holds nothing but padding means the device reported no serial.
+        val serial = String(decrypted, 8, 32, Charsets.US_ASCII).trim { it <= ' ' }.ifEmpty { null }
         val nameLength = decrypted[40].toInt() and 0xFF
         val nameEnd = minOf(41 + nameLength, decrypted.size)
         val name = String(decrypted, 41, nameEnd - 41, Charsets.UTF_8)
