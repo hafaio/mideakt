@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "2.2.20"
+    kotlin("jvm") version "2.4.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("org.jetbrains.dokka") version "2.0.0"
     `maven-publish`
