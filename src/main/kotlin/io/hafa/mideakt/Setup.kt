@@ -68,7 +68,9 @@ object Setup {
     private fun provisionV2(device: DiscoveredDevice): Result<DeviceCredentials> = runCatching {
         MideaClient(device.ip, device.port, device.id, device.version, ByteArray(0), ByteArray(0))
             .use { it.refresh() }
-        DeviceCredentials(device.name, device.id, device.ip, device.port, device.version, "", "")
+        DeviceCredentials(
+            device.name, device.id, device.ip, device.port, device.version, "", "", device.serialNumber,
+        )
     }
 
     /**
@@ -90,6 +92,7 @@ object Setup {
                 return Result.success(
                     DeviceCredentials(
                         device.name, device.id, device.ip, device.port, device.version, pair.first, pair.second,
+                        device.serialNumber,
                     ),
                 )
             } catch (e: Exception) {
