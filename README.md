@@ -98,7 +98,10 @@ val (token, key) = listOf(false, true).firstNotNullOf { bigEndian ->
 }
 
 val client = MideaClient(
-    DeviceCredentials(device.name, device.id, device.ip, device.port, device.version, token, key),
+    DeviceCredentials(
+        device.name, device.id, device.ip, device.port, device.version,
+        token, key, device.serialNumber,
+    ),
 )
 println(OperationalMode.fromRaw(client.refresh().mode))
 ```
