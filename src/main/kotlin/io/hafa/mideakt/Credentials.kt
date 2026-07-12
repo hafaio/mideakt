@@ -20,4 +20,6 @@ data class DeviceCredentials(
     val token: String,
     /** The authentication key as a hex string; empty for non-V3 devices. */
     val key: String,
+    /** The device's serial number, from discovery; null if the device reported none. */
+    val serialNumber: String?,
 )
